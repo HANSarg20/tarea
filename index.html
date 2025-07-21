@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Resumidor Inteligente v2 (Multi-página)</title>
+    <title>Resumidor Inteligente v2 (Corregido)</title>
     <!-- Incluyendo Tailwind CSS para el diseño -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Incluyendo Tesseract.js para OCR (Reconocimiento de Texto en Imágenes) -->
@@ -61,7 +61,6 @@
                         Desde Galería
                     </button>
                 </div>
-                <!-- Inputs ocultos para la cámara y la galería (ahora múltiple) -->
                 <input type="file" id="cameraInput" class="hidden" accept="image/*" capture="environment">
                 <input type="file" id="galleryInput" class="hidden" accept="image/*" multiple>
                 <p class="text-xs text-center text-gray-500 mt-2">Puedes seleccionar varias imágenes desde la galería.</p>
@@ -97,7 +96,7 @@
     </div>
 
     <script>
-        // --- Selección de Elementos del DOM ---
+        // --- DOM Element Selection ---
         const originalTextInput = document.getElementById('originalText');
         const summarizeBtn = document.getElementById('summarizeBtn');
         const summaryOutput = document.getElementById('summary');
@@ -113,10 +112,9 @@
         const ocrStatus = document.getElementById('ocrStatus');
 
         let isSpeaking = false;
-        let currentUtterance = null;
-        const API_MODEL = 'gemini-1.5-flash-latest';
+        const API_MODEL = 'gemini-2.0-flash'; // Corrected model
 
-        // --- Lógica de la Aplicación ---
+        // --- UI and State Management ---
 
         function setButtonsState(disabled) {
             summarizeBtn.disabled = disabled;
@@ -140,95 +138,103 @@
             errorMessageDiv.textContent = '';
         }
 
+        // --- Core Logic ---
+
         /**
-         * Llama a la API de IA para una tarea específica (corregir o resumir).
-         * @param {string} prompt - El prompt para la IA.
-         * @returns {Promise<string>} El texto resultante de la IA.
+         * Calls the AI API for a specific task (correction or summarization).
+         * @param {string} prompt - The prompt for the AI.
+         * @returns {Promise<string>} The resulting text from the AI.
          */
         async function callAI(prompt) {
             const payload = { contents: [{ role: "user", parts: [{ text: prompt }] }] };
-            const apiKey = ""; // Clave gestionada por el entorno
+            const apiKey = ""; // Key is managed by the execution environment.
             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${API_MODEL}:generateContent?key=${apiKey}`;
 
-            const response = await fetch(apiUrl, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
+            try {
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
 
-            if (!response.ok) {
-                const errorBody = await response.text();
-                console.error("API Error Response:", errorBody);
-                throw new Error(`Error al conectar con la IA (Código: ${response.status}). Por favor, revisa tu conexión e inténtalo de nuevo.`);
-            }
+                if (!response.ok) {
+                    const errorBody = await response.json().catch(() => response.text());
+                    console.error("API Error Response:", errorBody);
+                    const errorMessage = errorBody?.error?.message || `Código: ${response.status}`;
+                    throw new Error(`Error de la IA: ${errorMessage}`);
+                }
 
-            const result = await response.json();
+                const result = await response.json();
 
-            if (result.candidates?.[0]?.content?.parts?.[0]?.text) {
-                return result.candidates[0].content.parts[0].text;
-            } else {
-                console.error("Respuesta inesperada de la API:", result);
-                throw new Error("La respuesta de la IA estaba vacía o en un formato inesperado.");
+                if (result.candidates?.[0]?.content?.parts?.[0]?.text) {
+                    return result.candidates[0].content.parts[0].text;
+                } else {
+                    console.error("Unexpected API response structure:", result);
+                    throw new Error("La respuesta de la IA no tuvo el formato esperado.");
+                }
+            } catch (error) {
+                console.error("Fetch/Network Error:", error);
+                throw new Error(error.message || "Error de red al contactar la IA. Revisa tu conexión.");
             }
         }
         
         /**
-         * Usa una IA para corregir el texto extraído por el OCR.
-         * @param {string} rawText - El texto crudo del OCR.
-         * @returns {Promise<string>} El texto corregido.
+         * Uses AI to correct text extracted by OCR.
+         * @param {string} rawText - The raw text from OCR.
+         * @returns {Promise<string>} The corrected text.
          */
         async function correctTextWithAI(rawText) {
-            const prompt = `El siguiente texto fue extraído de una imagen usando OCR y puede contener errores como palabras unidas, saltos de línea incorrectos, o caracteres mal interpretados. Tu tarea es limpiar y corregir este texto para que sea gramaticalmente correcto y legible. No cambies el significado original. Une las palabras que estén separadas incorrectamente y arregla los saltos de línea para formar párrafos coherentes. Devuelve únicamente el texto limpio y corregido.\n\nTexto a corregir:\n"""\n${rawText}\n"""`;
+            const prompt = `El siguiente texto fue extraído de una imagen usando OCR y puede contener errores. Tu tarea es limpiar y corregir este texto para que sea gramaticalmente correcto y legible. No cambies el significado original. Une las palabras que estén separadas incorrectamente y arregla los saltos de línea para formar párrafos coherentes. Devuelve únicamente el texto limpio y corregido.\n\nTexto a corregir:\n"""\n${rawText}\n"""`;
             return callAI(prompt);
         }
 
         /**
-         * Procesa una lista de archivos de imagen, extrae, corrige y concatena el texto.
-         * @param {FileList} files - La lista de archivos de imagen a procesar.
+         * Processes a list of image files, extracts, corrects, and concatenates the text.
+         * @param {FileList} files - The list of image files to process.
          */
         async function processImageFiles(files) {
             if (!files || files.length === 0) return;
             
             clearError();
-            originalTextInput.value = '';
+            originalTextInput.value = ''; // Clear previous text
             setLoading(true, 'Iniciando proceso...');
             
             const allCorrectedTexts = [];
             const totalFiles = files.length;
+            let worker;
 
             try {
-                const worker = await Tesseract.createWorker('spa');
+                ocrStatus.textContent = 'Cargando motor de reconocimiento...';
+                worker = await Tesseract.createWorker('spa');
 
                 for (let i = 0; i < totalFiles; i++) {
                     const file = files[i];
-                    const statusPrefix = `[Página ${i + 1} de ${totalFiles}]`;
-
-                    // 1. Reconocimiento de texto (OCR)
-                    ocrStatus.textContent = `${statusPrefix} Reconociendo texto...`;
+                    const statusPrefix = `[Página ${i + 1}/${totalFiles}]`;
+                    
                     setLoading(true, `${statusPrefix} Reconociendo texto...`);
+                    ocrStatus.textContent = `${statusPrefix} Reconociendo...`;
                     const { data: { text: rawText } } = await worker.recognize(file);
                     
                     if (!rawText.trim()) {
-                        allCorrectedTexts.push(`--- ERROR: No se detectó texto en la página ${i + 1} ---`);
-                        continue; // Saltar a la siguiente imagen si no hay texto
+                        console.warn(`No text found on page ${i + 1}.`);
+                        continue; 
                     }
 
-                    // 2. Corrección con IA
-                    ocrStatus.textContent = `${statusPrefix} Corrigiendo con IA...`;
                     setLoading(true, `${statusPrefix} Corrigiendo con IA...`);
+                    ocrStatus.textContent = `${statusPrefix} Corrigiendo...`;
                     const correctedText = await correctTextWithAI(rawText);
                     allCorrectedTexts.push(correctedText);
                 }
                 
-                await worker.terminate();
-
-                // 3. Unir todo el texto
                 originalTextInput.value = allCorrectedTexts.join('\n\n---\n\n');
 
             } catch (error) {
-                console.error("Error en el proceso de imágenes:", error);
+                console.error("Error during image processing:", error);
                 displayError(error.message);
             } finally {
+                if (worker) {
+                    await worker.terminate();
+                }
                 setLoading(false);
                 ocrStatus.textContent = '';
             }
@@ -257,7 +263,7 @@
                 summaryOutput.textContent = summaryText;
                 readBtn.disabled = false;
             } catch (error) {
-                console.error("Error al generar el resumen:", error);
+                console.error("Error during summarization:", error);
                 displayError(error.message);
             } finally {
                 setLoading(false);
@@ -265,43 +271,48 @@
         }
 
         function handleReadAloud() {
-            if (!('speechSynthesis' in window)) {
+            const synth = window.speechSynthesis;
+            if (!synth) {
                 displayError("Tu navegador no soporta la síntesis de voz.");
                 return;
             }
 
-            if (isSpeaking) {
-                window.speechSynthesis.cancel();
+            if (synth.speaking) {
+                synth.cancel();
                 return;
             }
 
             const textToRead = summaryOutput.textContent;
             if (!textToRead) return;
 
-            currentUtterance = new SpeechSynthesisUtterance(textToRead);
-            currentUtterance.lang = 'es-ES';
-            currentUtterance.rate = 1;
-            currentUtterance.pitch = 1;
-
-            currentUtterance.onstart = () => {
+            const utterance = new SpeechSynthesisUtterance(textToRead);
+            utterance.lang = 'es-ES';
+            
+            utterance.onstart = () => {
                 isSpeaking = true;
                 readBtnText.textContent = 'Detener Lectura';
                 readBtn.classList.replace('bg-green-600', 'bg-red-600');
                 readBtn.classList.replace('hover:bg-green-700', 'hover:bg-red-700');
             };
 
-            currentUtterance.onend = () => {
+            const resetReadButton = () => {
                 isSpeaking = false;
                 readBtnText.textContent = 'Leer Resumen';
                 readBtn.classList.replace('bg-red-600', 'bg-green-600');
                 readBtn.classList.replace('hover:bg-red-700', 'hover:bg-green-700');
-                currentUtterance = null;
+            };
+
+            utterance.onend = resetReadButton;
+            utterance.onerror = (event) => {
+                console.error('SpeechSynthesisUtterance.onerror', event);
+                displayError(`Error al leer en voz alta: ${event.error}`);
+                resetReadButton();
             };
             
-            window.speechSynthesis.speak(currentUtterance);
+            synth.speak(utterance);
         }
         
-        // --- Asignación de Eventos ---
+        // --- Event Listeners ---
         summarizeBtn.addEventListener('click', handleSummarize);
         readBtn.addEventListener('click', handleReadAloud);
         cameraBtn.addEventListener('click', () => cameraInput.click());
@@ -309,13 +320,14 @@
         
         cameraInput.addEventListener('change', (event) => {
             processImageFiles(event.target.files);
-            event.target.value = null; // Reset para poder tomar otra foto
+            event.target.value = null;
         });
 
         galleryInput.addEventListener('change', (event) => {
             processImageFiles(event.target.files);
-            event.target.value = null; // Reset para poder seleccionar los mismos archivos
+            event.target.value = null;
         });
     </script>
 </body>
 </html>
+

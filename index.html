@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Resumidor Inteligente con Corrección IA</title>
+    <title>Resumidor Inteligente v2 (Multi-página)</title>
     <!-- Incluyendo Tailwind CSS para el diseño -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Incluyendo Tesseract.js para OCR (Reconocimiento de Texto en Imágenes) -->
@@ -29,7 +29,6 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
-        /* Asegura que los botones mantengan su altura incluso cuando están deshabilitados */
         button:disabled {
             cursor: not-allowed;
             opacity: 0.6;
@@ -41,8 +40,8 @@
     <div class="w-full max-w-4xl mx-auto bg-white shadow-2xl rounded-2xl p-6 md:p-10">
         
         <div class="text-center mb-8">
-            <h1 class="text-3xl md:text-4xl font-bold text-gray-900">Resumidor Inteligente</h1>
-            <p class="text-gray-500 mt-2">Extrae, corrige y resume texto de imágenes o pégalo directamente.</p>
+            <h1 class="text-3xl md:text-4xl font-bold text-gray-900">Resumidor Inteligente Pro</h1>
+            <p class="text-gray-500 mt-2">Extrae, corrige y resume texto de una o varias páginas.</p>
         </div>
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -62,8 +61,10 @@
                         Desde Galería
                     </button>
                 </div>
+                <!-- Inputs ocultos para la cámara y la galería (ahora múltiple) -->
                 <input type="file" id="cameraInput" class="hidden" accept="image/*" capture="environment">
-                <input type="file" id="galleryInput" class="hidden" accept="image/*">
+                <input type="file" id="galleryInput" class="hidden" accept="image/*" multiple>
+                <p class="text-xs text-center text-gray-500 mt-2">Puedes seleccionar varias imágenes desde la galería.</p>
 
                 <div id="ocrStatus" class="mt-3 text-center text-sm font-medium text-blue-600 h-5"></div>
 
@@ -158,7 +159,7 @@
             if (!response.ok) {
                 const errorBody = await response.text();
                 console.error("API Error Response:", errorBody);
-                throw new Error(`Error de la API: ${response.status}. Inténtalo de nuevo.`);
+                throw new Error(`Error al conectar con la IA (Código: ${response.status}). Por favor, revisa tu conexión e inténtalo de nuevo.`);
             }
 
             const result = await response.json();
@@ -177,46 +178,55 @@
          * @returns {Promise<string>} El texto corregido.
          */
         async function correctTextWithAI(rawText) {
-            const prompt = `Corrige la ortografía, gramática, y cualquier error de formato del siguiente texto extraído de una imagen. Asegúrate de que el texto sea coherente y legible, pero no lo resumas ni añadas información nueva. Devuelve únicamente el texto corregido.\n\nTexto a corregir:\n"""\n${rawText}\n"""`;
+            const prompt = `El siguiente texto fue extraído de una imagen usando OCR y puede contener errores como palabras unidas, saltos de línea incorrectos, o caracteres mal interpretados. Tu tarea es limpiar y corregir este texto para que sea gramaticalmente correcto y legible. No cambies el significado original. Une las palabras que estén separadas incorrectamente y arregla los saltos de línea para formar párrafos coherentes. Devuelve únicamente el texto limpio y corregido.\n\nTexto a corregir:\n"""\n${rawText}\n"""`;
             return callAI(prompt);
         }
 
         /**
-         * Procesa una imagen usando Tesseract.js y luego la IA para corregir el texto.
-         * @param {File} file - El archivo de imagen a procesar.
+         * Procesa una lista de archivos de imagen, extrae, corrige y concatena el texto.
+         * @param {FileList} files - La lista de archivos de imagen a procesar.
          */
-        async function processImageWithOCR(file) {
-            if (!file) return;
+        async function processImageFiles(files) {
+            if (!files || files.length === 0) return;
             
             clearError();
             originalTextInput.value = '';
-            setLoading(true, 'Reconociendo texto...');
-            ocrStatus.textContent = '';
+            setLoading(true, 'Iniciando proceso...');
+            
+            const allCorrectedTexts = [];
+            const totalFiles = files.length;
 
             try {
-                const worker = await Tesseract.createWorker('spa', 1, {
-                    logger: m => {
-                        if (m.status === 'recognizing text') {
-                           ocrStatus.textContent = `Reconociendo: ${Math.round(m.progress * 100)}%`;
-                        }
+                const worker = await Tesseract.createWorker('spa');
+
+                for (let i = 0; i < totalFiles; i++) {
+                    const file = files[i];
+                    const statusPrefix = `[Página ${i + 1} de ${totalFiles}]`;
+
+                    // 1. Reconocimiento de texto (OCR)
+                    ocrStatus.textContent = `${statusPrefix} Reconociendo texto...`;
+                    setLoading(true, `${statusPrefix} Reconociendo texto...`);
+                    const { data: { text: rawText } } = await worker.recognize(file);
+                    
+                    if (!rawText.trim()) {
+                        allCorrectedTexts.push(`--- ERROR: No se detectó texto en la página ${i + 1} ---`);
+                        continue; // Saltar a la siguiente imagen si no hay texto
                     }
-                });
-                
-                const { data: { text: rawText } } = await worker.recognize(file);
-                await worker.terminate();
-                
-                if (!rawText.trim()) {
-                    throw new Error("No se pudo detectar texto en la imagen. Intenta con una más clara.");
+
+                    // 2. Corrección con IA
+                    ocrStatus.textContent = `${statusPrefix} Corrigiendo con IA...`;
+                    setLoading(true, `${statusPrefix} Corrigiendo con IA...`);
+                    const correctedText = await correctTextWithAI(rawText);
+                    allCorrectedTexts.push(correctedText);
                 }
+                
+                await worker.terminate();
 
-                ocrStatus.textContent = 'Texto extraído. Corrigiendo con IA...';
-                setLoading(true, 'Corrigiendo con IA...');
-
-                const correctedText = await correctTextWithAI(rawText);
-                originalTextInput.value = correctedText;
+                // 3. Unir todo el texto
+                originalTextInput.value = allCorrectedTexts.join('\n\n---\n\n');
 
             } catch (error) {
-                console.error("Error en el proceso de OCR/Corrección:", error);
+                console.error("Error en el proceso de imágenes:", error);
                 displayError(error.message);
             } finally {
                 setLoading(false);
@@ -242,7 +252,7 @@
             }
 
             try {
-                const prompt = `Resume el siguiente texto en español de forma clara y concisa, extrayendo las ideas y puntos más importantes en viñetas (bullet points). El resumen debe ser fácil de entender.\n\nTexto:\n"""\n${textToSummarize}\n"""`;
+                const prompt = `Resume el siguiente texto, que puede contener múltiples páginas separadas por "---". Extrae las ideas y puntos más importantes de todo el contenido de forma clara y concisa en una lista de viñetas (bullet points). El resumen debe ser coherente y fácil de entender.\n\nTexto completo:\n"""\n${textToSummarize}\n"""`;
                 const summaryText = await callAI(prompt);
                 summaryOutput.textContent = summaryText;
                 readBtn.disabled = false;
@@ -298,15 +308,13 @@
         galleryBtn.addEventListener('click', () => galleryInput.click());
         
         cameraInput.addEventListener('change', (event) => {
-            const file = event.target.files[0];
-            processImageWithOCR(file);
-            event.target.value = null;
+            processImageFiles(event.target.files);
+            event.target.value = null; // Reset para poder tomar otra foto
         });
 
         galleryInput.addEventListener('change', (event) => {
-            const file = event.target.files[0];
-            processImageWithOCR(file);
-            event.target.value = null;
+            processImageFiles(event.target.files);
+            event.target.value = null; // Reset para poder seleccionar los mismos archivos
         });
     </script>
 </body>

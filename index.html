@@ -121,6 +121,7 @@
         const speedValue = document.getElementById('speedValue');
 
         let isSpeaking = false;
+        let utteranceQueue = [];
         const API_MODEL = 'gemini-2.0-flash'; // Confirmed compatible model
 
         // --- UI and State Management ---
@@ -275,6 +276,42 @@
                 setLoading(false);
             }
         }
+        
+        // --- Speech Synthesis Logic (Refactored for Robustness) ---
+
+        function resetReadButton() {
+            isSpeaking = false;
+            readBtnText.textContent = 'Leer Resumen';
+            readBtn.classList.replace('bg-red-600', 'bg-green-600');
+            readBtn.classList.replace('hover:bg-red-700', 'hover:bg-green-700');
+        }
+
+        function speakNextChunk() {
+            if (utteranceQueue.length === 0 || !isSpeaking) {
+                resetReadButton();
+                return;
+            }
+
+            const synth = window.speechSynthesis;
+            const chunk = utteranceQueue.shift();
+            const utterance = new SpeechSynthesisUtterance(chunk);
+            utterance.lang = 'es-ES';
+            utterance.rate = parseFloat(speedControl.value);
+
+            utterance.onend = () => {
+                // Short delay between chunks to sound more natural
+                setTimeout(speakNextChunk, 100);
+            };
+
+            utterance.onerror = (event) => {
+                console.error('SpeechSynthesisUtterance.onerror', event);
+                // Don't display a user-facing error for chunking, just stop.
+                resetReadButton();
+                utteranceQueue = []; // Clear queue on error
+            };
+            
+            synth.speak(utterance);
+        }
 
         function handleReadAloud() {
             const synth = window.speechSynthesis;
@@ -283,40 +320,30 @@
                 return;
             }
 
-            if (synth.speaking) {
-                synth.cancel();
+            // If speaking, stop everything.
+            if (isSpeaking) {
+                isSpeaking = false; // Signal to stop the loop
+                utteranceQueue = []; // Clear the queue
+                synth.cancel(); // Stop current speech
+                resetReadButton();
                 return;
             }
 
             const textToRead = summaryOutput.textContent;
             if (!textToRead) return;
 
-            const utterance = new SpeechSynthesisUtterance(textToRead);
-            utterance.lang = 'es-ES';
-            utterance.rate = parseFloat(speedControl.value);
-            
-            utterance.onstart = () => {
+            // Split text into smaller, manageable chunks (e.g., by sentences)
+            // This regex splits by periods, question marks, or exclamation points followed by a space.
+            const chunks = textToRead.match(/[^.!?]+[.!?]*\s*|[^.!?]+$/g) || [];
+            utteranceQueue = chunks.filter(chunk => chunk.trim().length > 0);
+
+            if (utteranceQueue.length > 0) {
                 isSpeaking = true;
                 readBtnText.textContent = 'Detener Lectura';
                 readBtn.classList.replace('bg-green-600', 'bg-red-600');
                 readBtn.classList.replace('hover:bg-green-700', 'hover:bg-red-700');
-            };
-
-            const resetReadButton = () => {
-                isSpeaking = false;
-                readBtnText.textContent = 'Leer Resumen';
-                readBtn.classList.replace('bg-red-600', 'bg-green-600');
-                readBtn.classList.replace('hover:bg-red-700', 'hover:bg-green-700');
-            };
-
-            utterance.onend = resetReadButton;
-            utterance.onerror = (event) => {
-                console.error('SpeechSynthesisUtterance.onerror', event);
-                displayError(`Error al leer en voz alta: ${event.error}`);
-                resetReadButton();
-            };
-            
-            synth.speak(utterance);
+                speakNextChunk();
+            }
         }
         
         // --- Event Listeners ---
@@ -338,6 +365,13 @@
         speedControl.addEventListener('input', (event) => {
             const currentSpeed = parseFloat(event.target.value).toFixed(1);
             speedValue.textContent = `${currentSpeed}x`;
+            // If speaking, cancel and restart with the new speed
+            if (isSpeaking) {
+                const synth = window.speechSynthesis;
+                synth.cancel();
+                // The onend event will not fire reliably after cancel, so we manually restart
+                speakNextChunk();
+            }
         });
     </script>
 </body>

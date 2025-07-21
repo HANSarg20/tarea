@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Resumidor Inteligente v4 (con Control de Voz)</title>
+    <title>Resumidor Inteligente v5 (Pausa y Estabilidad)</title>
     <!-- Incluyendo Tailwind CSS para el diseño -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Incluyendo Tesseract.js para OCR (Reconocimiento de Texto en Imágenes) -->
@@ -86,7 +86,7 @@
                     <p id="summary" class="text-gray-600 whitespace-pre-wrap"></p>
                 </div>
                 <button id="readBtn" class="mt-4 w-full bg-green-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-transform transform hover:scale-105 flex items-center justify-center gap-2" disabled>
-                    <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+                    <svg id="readBtnIcon" class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
                     <span id="readBtnText">Leer Resumen</span>
                 </button>
                 <!-- Control de Velocidad de Voz -->
@@ -107,6 +107,7 @@
         const summarizeBtn = document.getElementById('summarizeBtn');
         const summaryOutput = document.getElementById('summary');
         const readBtn = document.getElementById('readBtn');
+        const readBtnIcon = document.getElementById('readBtnIcon');
         const readBtnText = document.getElementById('readBtnText');
         const loader = document.getElementById('loader');
         const loaderText = document.getElementById('loader-text');
@@ -120,9 +121,13 @@
         const speedControl = document.getElementById('speedControl');
         const speedValue = document.getElementById('speedValue');
 
-        let isSpeaking = false;
-        let utteranceQueue = [];
-        const API_MODEL = 'gemini-2.0-flash'; // Confirmed compatible model
+        const speechState = {
+            IDLE: 'idle',
+            PLAYING: 'playing',
+            PAUSED: 'paused',
+        };
+        let currentSpeechState = speechState.IDLE;
+        const API_MODEL = 'gemini-2.0-flash'; 
 
         // --- UI and State Management ---
 
@@ -259,8 +264,10 @@
             readBtn.disabled = true;
             speedControlContainer.classList.add('hidden');
 
-            if (isSpeaking) {
-                window.speechSynthesis.cancel();
+            // Cancel any ongoing speech before generating a new summary
+            const synth = window.speechSynthesis;
+            if (synth.speaking || synth.pending) {
+                synth.cancel();
             }
 
             try {
@@ -277,72 +284,86 @@
             }
         }
         
-        // --- Speech Synthesis Logic (Refactored for Robustness) ---
+        // --- Speech Synthesis Logic (Robust Version with Pause/Resume) ---
 
-        function resetReadButton() {
-            isSpeaking = false;
-            readBtnText.textContent = 'Leer Resumen';
-            readBtn.classList.replace('bg-red-600', 'bg-green-600');
-            readBtn.classList.replace('hover:bg-red-700', 'hover:bg-green-700');
-        }
+        const synth = window.speechSynthesis;
+        let currentUtterance = null;
 
-        function speakNextChunk() {
-            if (utteranceQueue.length === 0 || !isSpeaking) {
-                resetReadButton();
-                return;
+        function updateReadButtonUI(state) {
+            switch (state) {
+                case speechState.PLAYING:
+                    readBtnText.textContent = 'Pausar';
+                    readBtnIcon.innerHTML = `<path d="M6 4h4v16H6zM14 4h4v16h-4z"/>`; // Pause icon
+                    readBtn.classList.replace('bg-green-600', 'bg-orange-500');
+                    readBtn.classList.replace('hover:bg-green-700', 'hover:bg-orange-600');
+                    break;
+                case speechState.PAUSED:
+                    readBtnText.textContent = 'Reanudar';
+                    readBtnIcon.innerHTML = `<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>`; // Play icon
+                    readBtn.classList.replace('bg-orange-500', 'bg-green-600');
+                    readBtn.classList.replace('hover:bg-orange-600', 'hover:bg-green-700');
+                    break;
+                case speechState.IDLE:
+                default:
+                    readBtnText.textContent = 'Leer Resumen';
+                    readBtnIcon.innerHTML = `<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>`; // Play icon
+                    readBtn.classList.remove('bg-orange-500', 'hover:bg-orange-600');
+                    readBtn.classList.add('bg-green-600', 'hover:bg-green-700');
+                    currentSpeechState = speechState.IDLE;
+                    break;
             }
-
-            const synth = window.speechSynthesis;
-            const chunk = utteranceQueue.shift();
-            const utterance = new SpeechSynthesisUtterance(chunk);
-            utterance.lang = 'es-ES';
-            utterance.rate = parseFloat(speedControl.value);
-
-            utterance.onend = () => {
-                // Short delay between chunks to sound more natural
-                setTimeout(speakNextChunk, 100);
-            };
-
-            utterance.onerror = (event) => {
-                console.error('SpeechSynthesisUtterance.onerror', event);
-                // Don't display a user-facing error for chunking, just stop.
-                resetReadButton();
-                utteranceQueue = []; // Clear queue on error
-            };
-            
-            synth.speak(utterance);
         }
+
+        synth.onend = () => {
+            updateReadButtonUI(speechState.IDLE);
+        };
+        
+        synth.onstart = () => {
+            updateReadButtonUI(speechState.PLAYING);
+        };
 
         function handleReadAloud() {
-            const synth = window.speechSynthesis;
             if (!synth) {
                 displayError("Tu navegador no soporta la síntesis de voz.");
                 return;
             }
 
-            // If speaking, stop everything.
-            if (isSpeaking) {
-                isSpeaking = false; // Signal to stop the loop
-                utteranceQueue = []; // Clear the queue
-                synth.cancel(); // Stop current speech
-                resetReadButton();
-                return;
-            }
+            if (currentSpeechState === speechState.PLAYING) {
+                synth.pause();
+                currentSpeechState = speechState.PAUSED;
+                updateReadButtonUI(speechState.PAUSED);
+            } else if (currentSpeechState === speechState.PAUSED) {
+                synth.resume();
+                currentSpeechState = speechState.PLAYING;
+                updateReadButtonUI(speechState.PLAYING);
+            } else { // IDLE state
+                const textToRead = summaryOutput.textContent;
+                if (!textToRead) return;
 
-            const textToRead = summaryOutput.textContent;
-            if (!textToRead) return;
+                // Cancel any previous speech just in case
+                synth.cancel();
 
-            // Split text into smaller, manageable chunks (e.g., by sentences)
-            // This regex splits by periods, question marks, or exclamation points followed by a space.
-            const chunks = textToRead.match(/[^.!?]+[.!?]*\s*|[^.!?]+$/g) || [];
-            utteranceQueue = chunks.filter(chunk => chunk.trim().length > 0);
+                // Create a single, long utterance. Modern browsers handle this better than chunking.
+                // The main issue is keeping the synth active, which is handled by the resume() calls.
+                currentUtterance = new SpeechSynthesisUtterance(textToRead);
+                currentUtterance.lang = 'es-ES';
+                currentUtterance.rate = parseFloat(speedControl.value);
+                
+                currentUtterance.onend = () => {
+                    currentSpeechState = speechState.IDLE;
+                    updateReadButtonUI(speechState.IDLE);
+                };
 
-            if (utteranceQueue.length > 0) {
-                isSpeaking = true;
-                readBtnText.textContent = 'Detener Lectura';
-                readBtn.classList.replace('bg-green-600', 'bg-red-600');
-                readBtn.classList.replace('hover:bg-green-700', 'hover:bg-red-700');
-                speakNextChunk();
+                currentUtterance.onerror = (event) => {
+                    console.error('SpeechSynthesisUtterance.onerror', event);
+                    displayError(`Error de voz: ${event.error}. Intenta de nuevo.`);
+                    currentSpeechState = speechState.IDLE;
+                    updateReadButtonUI(speechState.IDLE);
+                };
+
+                synth.speak(currentUtterance);
+                currentSpeechState = speechState.PLAYING;
+                updateReadButtonUI(speechState.PLAYING);
             }
         }
         
@@ -365,14 +386,27 @@
         speedControl.addEventListener('input', (event) => {
             const currentSpeed = parseFloat(event.target.value).toFixed(1);
             speedValue.textContent = `${currentSpeed}x`;
-            // If speaking, cancel and restart with the new speed
-            if (isSpeaking) {
-                const synth = window.speechSynthesis;
-                synth.cancel();
-                // The onend event will not fire reliably after cancel, so we manually restart
-                speakNextChunk();
+            // If speaking, we need to stop and restart with the new speed
+            if (currentSpeechState !== speechState.IDLE) {
+                const text = summaryOutput.textContent;
+                synth.cancel(); // This will trigger onend, resetting the state
+                // We create a new utterance with the new speed and play it
+                // A small delay helps ensure the cancel command has processed
+                setTimeout(() => {
+                    handleReadAloud();
+                }, 100);
             }
         });
+
+        // A safety net to reset the UI if the browser speech engine hangs
+        setInterval(() => {
+            if (currentSpeechState !== speechState.IDLE && !synth.speaking && !synth.paused) {
+                console.warn("Speech synthesis hung. Resetting UI.");
+                updateReadButtonUI(speechState.IDLE);
+            }
+        }, 1000);
+
     </script>
 </body>
 </html>
+

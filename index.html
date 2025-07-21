@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Resumidor Inteligente v5 (Pausa y Estabilidad)</title>
+    <title>Resumidor Inteligente v7 (Estable para Android)</title>
     <!-- Incluyendo Tailwind CSS para el diseño -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Incluyendo Tesseract.js para OCR (Reconocimiento de Texto en Imágenes) -->
@@ -121,16 +121,11 @@
         const speedControl = document.getElementById('speedControl');
         const speedValue = document.getElementById('speedValue');
 
-        const speechState = {
-            IDLE: 'idle',
-            PLAYING: 'playing',
-            PAUSED: 'paused',
-        };
-        let currentSpeechState = speechState.IDLE;
+        let isSpeaking = false;
+        let utteranceQueue = [];
         const API_MODEL = 'gemini-2.0-flash'; 
 
         // --- UI and State Management ---
-
         function setButtonsState(disabled) {
             summarizeBtn.disabled = disabled;
             cameraBtn.disabled = disabled;
@@ -264,9 +259,10 @@
             readBtn.disabled = true;
             speedControlContainer.classList.add('hidden');
 
-            // Cancel any ongoing speech before generating a new summary
             const synth = window.speechSynthesis;
             if (synth.speaking || synth.pending) {
+                isSpeaking = false;
+                utteranceQueue = [];
                 synth.cancel();
             }
 
@@ -284,43 +280,39 @@
             }
         }
         
-        // --- Speech Synthesis Logic (Robust Version with Pause/Resume) ---
+        // --- Speech Synthesis Logic (Robust Android-focused Version) ---
 
         const synth = window.speechSynthesis;
-        let currentUtterance = null;
 
-        function updateReadButtonUI(state) {
-            switch (state) {
-                case speechState.PLAYING:
-                    readBtnText.textContent = 'Pausar';
-                    readBtnIcon.innerHTML = `<path d="M6 4h4v16H6zM14 4h4v16h-4z"/>`; // Pause icon
-                    readBtn.classList.replace('bg-green-600', 'bg-orange-500');
-                    readBtn.classList.replace('hover:bg-green-700', 'hover:bg-orange-600');
-                    break;
-                case speechState.PAUSED:
-                    readBtnText.textContent = 'Reanudar';
-                    readBtnIcon.innerHTML = `<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>`; // Play icon
-                    readBtn.classList.replace('bg-orange-500', 'bg-green-600');
-                    readBtn.classList.replace('hover:bg-orange-600', 'hover:bg-green-700');
-                    break;
-                case speechState.IDLE:
-                default:
-                    readBtnText.textContent = 'Leer Resumen';
-                    readBtnIcon.innerHTML = `<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>`; // Play icon
-                    readBtn.classList.remove('bg-orange-500', 'hover:bg-orange-600');
-                    readBtn.classList.add('bg-green-600', 'hover:bg-green-700');
-                    currentSpeechState = speechState.IDLE;
-                    break;
+        function updateReadButtonUI(speaking) {
+            isSpeaking = speaking;
+            if (speaking) {
+                readBtnText.textContent = 'Detener';
+                readBtnIcon.innerHTML = `<rect x="6" y="6" width="12" height="12"></rect>`; // Stop icon
+                readBtn.classList.replace('bg-green-600', 'bg-red-600');
+                readBtn.classList.replace('hover:bg-green-700', 'hover:bg-red-700');
+            } else {
+                readBtnText.textContent = 'Leer Resumen';
+                readBtnIcon.innerHTML = `<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>`; // Play icon
+                readBtn.classList.remove('bg-red-600', 'hover:bg-red-700');
+                readBtn.classList.add('bg-green-600', 'hover:bg-green-700');
             }
         }
-
-        synth.onend = () => {
-            updateReadButtonUI(speechState.IDLE);
-        };
         
-        synth.onstart = () => {
-            updateReadButtonUI(speechState.PLAYING);
-        };
+        function speakNextChunk() {
+            if (utteranceQueue.length > 0 && isSpeaking) {
+                const utterance = utteranceQueue.shift();
+                utterance.onend = speakNextChunk;
+                utterance.onerror = (event) => {
+                    console.error('SpeechSynthesisUtterance.onerror', event);
+                    // No mostramos error al usuario, simplemente detenemos la lectura.
+                    updateReadButtonUI(false); 
+                };
+                synth.speak(utterance);
+            } else {
+                updateReadButtonUI(false);
+            }
+        }
 
         function handleReadAloud() {
             if (!synth) {
@@ -328,42 +320,30 @@
                 return;
             }
 
-            if (currentSpeechState === speechState.PLAYING) {
-                synth.pause();
-                currentSpeechState = speechState.PAUSED;
-                updateReadButtonUI(speechState.PAUSED);
-            } else if (currentSpeechState === speechState.PAUSED) {
-                synth.resume();
-                currentSpeechState = speechState.PLAYING;
-                updateReadButtonUI(speechState.PLAYING);
-            } else { // IDLE state
+            if (isSpeaking) {
+                isSpeaking = false;
+                utteranceQueue = [];
+                synth.cancel();
+                updateReadButtonUI(false);
+            } else {
                 const textToRead = summaryOutput.textContent;
                 if (!textToRead) return;
 
-                // Cancel any previous speech just in case
-                synth.cancel();
-
-                // Create a single, long utterance. Modern browsers handle this better than chunking.
-                // The main issue is keeping the synth active, which is handled by the resume() calls.
-                currentUtterance = new SpeechSynthesisUtterance(textToRead);
-                currentUtterance.lang = 'es-ES';
-                currentUtterance.rate = parseFloat(speedControl.value);
+                synth.cancel(); // Clear any previous state
                 
-                currentUtterance.onend = () => {
-                    currentSpeechState = speechState.IDLE;
-                    updateReadButtonUI(speechState.IDLE);
-                };
+                // Dividir el texto en frases cortas. Esto es crucial para la estabilidad en Android.
+                const chunks = textToRead.match(/[^.!?]+[.!?]*\s*|[^.!?]+$/g) || [];
+                utteranceQueue = chunks.map(chunk => {
+                    const utterance = new SpeechSynthesisUtterance(chunk.trim());
+                    utterance.lang = 'es-ES';
+                    utterance.rate = parseFloat(speedControl.value);
+                    return utterance;
+                }).filter(u => u.text.length > 0);
 
-                currentUtterance.onerror = (event) => {
-                    console.error('SpeechSynthesisUtterance.onerror', event);
-                    displayError(`Error de voz: ${event.error}. Intenta de nuevo.`);
-                    currentSpeechState = speechState.IDLE;
-                    updateReadButtonUI(speechState.IDLE);
-                };
-
-                synth.speak(currentUtterance);
-                currentSpeechState = speechState.PLAYING;
-                updateReadButtonUI(speechState.PLAYING);
+                if (utteranceQueue.length > 0) {
+                    updateReadButtonUI(true);
+                    speakNextChunk();
+                }
             }
         }
         
@@ -386,27 +366,27 @@
         speedControl.addEventListener('input', (event) => {
             const currentSpeed = parseFloat(event.target.value).toFixed(1);
             speedValue.textContent = `${currentSpeed}x`;
-            // If speaking, we need to stop and restart with the new speed
-            if (currentSpeechState !== speechState.IDLE) {
-                const text = summaryOutput.textContent;
-                synth.cancel(); // This will trigger onend, resetting the state
-                // We create a new utterance with the new speed and play it
-                // A small delay helps ensure the cancel command has processed
+            if (isSpeaking) {
+                synth.cancel();
+                // Un pequeño retraso ayuda a asegurar que el comando de cancelar se haya procesado
+                // antes de iniciar una nueva secuencia de voz.
                 setTimeout(() => {
                     handleReadAloud();
-                }, 100);
+                }, 250);
             }
         });
 
-        // A safety net to reset the UI if the browser speech engine hangs
+        // Red de seguridad para reiniciar la UI si el motor de voz se cuelga.
+        // Esto es un problema común en navegadores móviles.
         setInterval(() => {
-            if (currentSpeechState !== speechState.IDLE && !synth.speaking && !synth.paused) {
-                console.warn("Speech synthesis hung. Resetting UI.");
-                updateReadButtonUI(speechState.IDLE);
+            if (isSpeaking && !synth.speaking) {
+                console.warn("El motor de voz se ha colgado. Reiniciando UI.");
+                updateReadButtonUI(false);
             }
-        }, 1000);
+        }, 2000);
 
     </script>
 </body>
 </html>
+
 

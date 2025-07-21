@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Resumidor Inteligente v3 (Estable)</title>
+    <title>Resumidor Inteligente v4 (con Control de Voz)</title>
     <!-- Incluyendo Tailwind CSS para el diseño -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Incluyendo Tesseract.js para OCR (Reconocimiento de Texto en Imágenes) -->
@@ -89,6 +89,12 @@
                     <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
                     <span id="readBtnText">Leer Resumen</span>
                 </button>
+                <!-- Control de Velocidad de Voz -->
+                <div id="speedControlContainer" class="mt-3 flex items-center gap-3 hidden">
+                    <label for="speedControl" class="text-sm font-medium text-gray-700">Velocidad:</label>
+                    <input id="speedControl" type="range" min="0.5" max="2" value="1" step="0.1" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
+                    <span id="speedValue" class="text-sm font-semibold text-gray-800 w-10 text-center">1.0x</span>
+                </div>
             </div>
         </div>
         
@@ -110,9 +116,12 @@
         const cameraInput = document.getElementById('cameraInput');
         const galleryInput = document.getElementById('galleryInput');
         const ocrStatus = document.getElementById('ocrStatus');
+        const speedControlContainer = document.getElementById('speedControlContainer');
+        const speedControl = document.getElementById('speedControl');
+        const speedValue = document.getElementById('speedValue');
 
         let isSpeaking = false;
-        const API_MODEL = 'gemini-2.0-flash'; // Corrected model for free-tier environment
+        const API_MODEL = 'gemini-2.0-flash'; // Confirmed compatible model
 
         // --- UI and State Management ---
 
@@ -140,11 +149,6 @@
 
         // --- Core Logic ---
 
-        /**
-         * Calls the AI API for a specific task (correction or summarization).
-         * @param {string} prompt - The prompt for the AI.
-         * @returns {Promise<string>} The resulting text from the AI.
-         */
         async function callAI(prompt) {
             const payload = { contents: [{ role: "user", parts: [{ text: prompt }] }] };
             const apiKey = ""; // Key is managed by the execution environment.
@@ -178,21 +182,11 @@
             }
         }
         
-        /**
-         * Uses AI to correct text extracted by OCR.
-         * @param {string} rawText - The raw text from OCR.
-         * @returns {Promise<string>} The corrected text.
-         */
         async function correctTextWithAI(rawText) {
             const prompt = `El siguiente texto fue extraído de una imagen usando OCR y puede contener errores. Tu tarea es limpiar y corregir este texto para que sea gramaticalmente correcto y legible. No cambies el significado original. Une las palabras que estén separadas incorrectamente y arregla los saltos de línea para formar párrafos coherentes. Devuelve únicamente el texto limpio y corregido.\n\nTexto a corregir:\n"""\n${rawText}\n"""`;
             return callAI(prompt);
         }
 
-        /**
-         * Processes a list of image files, extracts, corrects, and concatenates the text.
-         * This function is now more robust for mobile devices.
-         * @param {FileList} files - The list of image files to process.
-         */
         async function processImageFiles(files) {
             if (!files || files.length === 0) return;
             
@@ -207,10 +201,9 @@
                 for (let i = 0; i < totalFiles; i++) {
                     const file = files[i];
                     const statusPrefix = `[Página ${i + 1}/${totalFiles}]`;
-                    let worker = null; // Worker will be created and terminated for each file
+                    let worker = null;
                     
                     try {
-                        // 1. Create worker and recognize text
                         setLoading(true, `${statusPrefix} Cargando motor OCR...`);
                         ocrStatus.textContent = `${statusPrefix} Cargando...`;
                         worker = await Tesseract.createWorker('spa');
@@ -224,7 +217,6 @@
                             continue; 
                         }
 
-                        // 2. Correct text with AI
                         setLoading(true, `${statusPrefix} Corrigiendo con IA...`);
                         ocrStatus.textContent = `${statusPrefix} Corrigiendo...`;
                         const correctedText = await correctTextWithAI(rawText);
@@ -234,7 +226,6 @@
                         console.error(`Error procesando la página ${i + 1}:`, err);
                         displayError(`Ocurrió un error en la página ${i + 1}. Saltando a la siguiente.`);
                     } finally {
-                        // 3. Terminate worker to free memory
                         if (worker) {
                             await worker.terminate();
                             ocrStatus.textContent = `${statusPrefix} completado.`;
@@ -265,6 +256,7 @@
             setLoading(true, 'Generando resumen...');
             summaryOutput.textContent = '';
             readBtn.disabled = true;
+            speedControlContainer.classList.add('hidden');
 
             if (isSpeaking) {
                 window.speechSynthesis.cancel();
@@ -275,6 +267,7 @@
                 const summaryText = await callAI(prompt);
                 summaryOutput.textContent = summaryText;
                 readBtn.disabled = false;
+                speedControlContainer.classList.remove('hidden');
             } catch (error) {
                 console.error("Error durante el resumen:", error);
                 displayError(error.message);
@@ -300,6 +293,7 @@
 
             const utterance = new SpeechSynthesisUtterance(textToRead);
             utterance.lang = 'es-ES';
+            utterance.rate = parseFloat(speedControl.value);
             
             utterance.onstart = () => {
                 isSpeaking = true;
@@ -339,6 +333,11 @@
         galleryInput.addEventListener('change', (event) => {
             processImageFiles(event.target.files);
             event.target.value = null;
+        });
+
+        speedControl.addEventListener('input', (event) => {
+            const currentSpeed = parseFloat(event.target.value).toFixed(1);
+            speedValue.textContent = `${currentSpeed}x`;
         });
     </script>
 </body>

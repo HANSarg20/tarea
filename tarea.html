@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Resumidor de Texto con IA</title>
+    <!-- Incluyendo Tailwind CSS para el diseño -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Incluyendo Tesseract.js para OCR (Reconocimiento de Texto en Imágenes) -->
+    <script src='https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js'></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; }
+        ::-webkit-scrollbar-thumb { background: #888; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #555; }
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-radius: 50%;
+            border-top: 4px solid #3498db;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800 flex items-center justify-center min-h-screen p-4">
+
+    <div class="w-full max-w-4xl mx-auto bg-white shadow-2xl rounded-2xl p-6 md:p-10">
+        
+        <div class="text-center mb-8">
+            <h1 class="text-3xl md:text-4xl font-bold text-gray-900">Resumidor Inteligente</h1>
+            <p class="text-gray-500 mt-2">Extrae texto de imágenes o pégalo directamente para resumirlo con IA.</p>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+            
+            <!-- Columna para el texto original y las entradas de imagen -->
+            <div class="flex flex-col">
+                <label for="originalText" class="text-lg font-semibold mb-2 text-gray-700">Tu Texto Original</label>
+                <textarea id="originalText" rows="12" class="w-full p-4 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition duration-200 resize-none" placeholder="Pega texto aquí o usa la cámara/galería..."></textarea>
+                
+                <!-- Contenedor para los botones de entrada de imagen -->
+                <div class="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <button id="cameraBtn" class="w-full bg-gray-700 text-white font-bold py-3 px-4 rounded-lg hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-transform transform hover:scale-105 flex items-center justify-center gap-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"></path><circle cx="12" cy="13" r="3"></circle></svg>
+                        Usar Cámara
+                    </button>
+                    <button id="galleryBtn" class="w-full bg-purple-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transition-transform transform hover:scale-105 flex items-center justify-center gap-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
+                        Desde Galería
+                    </button>
+                </div>
+                <!-- Inputs ocultos para la cámara y la galería -->
+                <input type="file" id="cameraInput" class="hidden" accept="image/*" capture="environment">
+                <input type="file" id="galleryInput" class="hidden" accept="image/*">
+
+                <!-- Estado del reconocimiento de texto (OCR) -->
+                <div id="ocrStatus" class="mt-3 text-center text-sm font-medium text-blue-600 hidden"></div>
+
+                <button id="summarizeBtn" class="mt-4 w-full bg-blue-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-transform transform hover:scale-105 flex items-center justify-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/><path d="M5 3v4"/><path d="M19 17v4"/><path d="M3 5h4"/><path d="M17 19h4"/></svg>
+                    Resumir Texto
+                </button>
+            </div>
+
+            <!-- Columna para el resumen generado -->
+            <div class="flex flex-col">
+                <label for="summary" class="text-lg font-semibold mb-2 text-gray-700">Resumen Generado</label>
+                <div id="summaryContainer" class="relative w-full h-full p-4 border border-gray-300 rounded-lg bg-gray-50 min-h-[300px] shadow-inner overflow-y-auto">
+                    <div id="loader" class="absolute inset-0 bg-white bg-opacity-75 flex items-center justify-center hidden">
+                        <div class="text-center">
+                            <div class="loader mx-auto"></div>
+                            <p id="loader-text" class="mt-2 text-gray-600">Generando resumen...</p>
+                        </div>
+                    </div>
+                    <p id="summary" class="text-gray-600 whitespace-pre-wrap"></p>
+                </div>
+                <button id="readBtn" class="mt-4 w-full bg-green-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-transform transform hover:scale-105 flex items-center justify-center gap-2 disabled:bg-gray-400 disabled:cursor-not-allowed" disabled>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+                    Leer Resumen
+                </button>
+            </div>
+
+        </div>
+        
+        <div id="error-message" class="mt-6 p-4 bg-red-100 border border-red-400 text-red-700 rounded-lg hidden"></div>
+
+    </div>
+
+    <script>
+        // --- Selección de Elementos del DOM ---
+        const originalTextInput = document.getElementById('originalText');
+        const summarizeBtn = document.getElementById('summarizeBtn');
+        const summaryOutput = document.getElementById('summary');
+        const readBtn = document.getElementById('readBtn');
+        const loader = document.getElementById('loader');
+        const loaderText = document.getElementById('loader-text');
+        const errorMessageDiv = document.getElementById('error-message');
+        const readBtnIcon = readBtn.querySelector('svg');
+        
+        // --- Nuevos elementos para Cámara/Galería ---
+        const cameraBtn = document.getElementById('cameraBtn');
+        const galleryBtn = document.getElementById('galleryBtn');
+        const cameraInput = document.getElementById('cameraInput');
+        const galleryInput = document.getElementById('galleryInput');
+        const ocrStatus = document.getElementById('ocrStatus');
+
+        let isSpeaking = false;
+        let currentUtterance = null;
+
+        // --- Lógica de la Aplicación ---
+
+        function setLoading(isLoading, message = "Generando resumen...") {
+            loader.classList.toggle('hidden', !isLoading);
+            loaderText.textContent = message;
+            summarizeBtn.disabled = isLoading;
+            summarizeBtn.classList.toggle('opacity-50', isLoading);
+            cameraBtn.disabled = isLoading;
+            galleryBtn.disabled = isLoading;
+        }
+
+        function displayError(message) {
+            errorMessageDiv.textContent = message;
+            errorMessageDiv.classList.remove('hidden');
+        }
+
+        function clearError() {
+            errorMessageDiv.classList.add('hidden');
+            errorMessageDiv.textContent = '';
+        }
+
+        /**
+         * Procesa una imagen usando Tesseract.js para extraer texto.
+         * @param {File} file - El archivo de imagen a procesar.
+         */
+        async function processImageWithOCR(file) {
+            if (!file) return;
+            
+            clearError();
+            originalTextInput.value = ''; // Limpiar texto anterior
+            ocrStatus.classList.remove('hidden');
+            ocrStatus.textContent = 'Iniciando reconocimiento de texto...';
+            
+            try {
+                // Crear un trabajador de Tesseract para el idioma español
+                const worker = await Tesseract.createWorker('spa', 1, {
+                    logger: m => {
+                        if (m.status === 'recognizing text') {
+                           ocrStatus.textContent = `Reconociendo texto: ${Math.round(m.progress * 100)}%`;
+                        }
+                    }
+                });
+                
+                // Reconocer el texto de la imagen
+                const { data: { text } } = await worker.recognize(file);
+                originalTextInput.value = text; // Poner el texto extraído en el textarea
+                
+                if(!text.trim()){
+                     displayError("No se pudo detectar texto en la imagen. Intenta con una imagen más clara.");
+                }
+
+                await worker.terminate(); // Terminar el trabajador para liberar memoria
+                ocrStatus.classList.add('hidden');
+
+            } catch (error) {
+                console.error("Error en el proceso de OCR:", error);
+                displayError("Ocurrió un error al reconocer el texto de la imagen.");
+                ocrStatus.classList.add('hidden');
+            }
+        }
+
+        async function handleSummarize() {
+            clearError();
+            const textToSummarize = originalTextInput.value.trim();
+
+            if (!textToSummarize) {
+                displayError("Por favor, introduce o extrae algo de texto para resumir.");
+                return;
+            }
+
+            setLoading(true);
+            summaryOutput.textContent = '';
+            readBtn.disabled = true;
+
+            if (isSpeaking) {
+                window.speechSynthesis.cancel();
+            }
+
+            try {
+                const prompt = `Resume el siguiente texto en español de forma clara y concisa, extrayendo las ideas y puntos más importantes. El resumen debe ser fácil de entender. Texto: "${textToSummarize}"`;
+                
+                const payload = { contents: [{ role: "user", parts: [{ text: prompt }] }] };
+                const apiKey = ""; // Clave gestionada por el entorno
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) throw new Error(`Error de la API: ${response.status}`);
+
+                const result = await response.json();
+
+                if (result.candidates?.[0]?.content?.parts?.[0]?.text) {
+                    summaryOutput.textContent = result.candidates[0].content.parts[0].text;
+                    readBtn.disabled = false;
+                } else {
+                    displayError("No se pudo generar el resumen. La respuesta de la IA estaba vacía.");
+                }
+
+            } catch (error) {
+                console.error("Error al generar el resumen:", error);
+                displayError("Ocurrió un error al conectar con el servicio de IA. Inténtalo de nuevo.");
+            } finally {
+                setLoading(false);
+            }
+        }
+
+        function handleReadAloud() {
+            if (!('speechSynthesis' in window)) {
+                displayError("Tu navegador no soporta la síntesis de voz.");
+                return;
+            }
+
+            if (isSpeaking) {
+                window.speechSynthesis.cancel();
+                return;
+            }
+
+            const textToRead = summaryOutput.textContent;
+            if (!textToRead) return;
+
+            currentUtterance = new SpeechSynthesisUtterance(textToRead);
+            currentUtterance.lang = 'es-ES';
+            currentUtterance.rate = 1;
+            currentUtterance.pitch = 1;
+
+            currentUtterance.onstart = () => {
+                isSpeaking = true;
+                readBtn.querySelector('span').textContent = 'Detener Lectura';
+                readBtn.classList.replace('bg-green-600', 'bg-red-600');
+                readBtn.classList.replace('hover:bg-green-700', 'hover:bg-red-700');
+            };
+
+            currentUtterance.onend = () => {
+                isSpeaking = false;
+                readBtn.querySelector('span').textContent = 'Leer Resumen';
+                readBtn.classList.replace('bg-red-600', 'bg-green-600');
+                readBtn.classList.replace('hover:bg-red-700', 'hover:bg-green-700');
+                currentUtterance = null;
+            };
+            
+            // Re-estructuramos el botón para poder cambiar el texto fácilmente
+            readBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 10v4m4-4v4"/><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg><span>Detener Lectura</span>`;
+            readBtn.classList.replace('bg-green-600', 'bg-red-600');
+            readBtn.classList.replace('hover:bg-green-700', 'hover:bg-red-700');
+
+            currentUtterance.onend = () => {
+                isSpeaking = false;
+                readBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg><span>Leer Resumen</span>`;
+                readBtn.classList.replace('bg-red-600', 'bg-green-600');
+                readBtn.classList.replace('hover:bg-red-700', 'hover:bg-green-700');
+                currentUtterance = null;
+            };
+
+            window.speechSynthesis.speak(currentUtterance);
+        }
+        
+        // --- Asignación de Eventos ---
+        summarizeBtn.addEventListener('click', handleSummarize);
+        readBtn.addEventListener('click', handleReadAloud);
+
+        // --- Eventos para Cámara y Galería ---
+        cameraBtn.addEventListener('click', () => cameraInput.click());
+        galleryBtn.addEventListener('click', () => galleryInput.click());
+        
+        cameraInput.addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            processImageWithOCR(file);
+            event.target.value = null; // Resetear para poder tomar otra foto
+        });
+
+        galleryInput.addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            processImageWithOCR(file);
+            event.target.value = null; // Resetear para poder seleccionar el mismo archivo
+        });
+
+        // Inicializar el texto del botón de lectura
+        readBtn.querySelector('svg').insertAdjacentHTML('afterend', '<span>Leer Resumen</span>');
+
+    </script>
+</body>
+</html>

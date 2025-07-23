@@ -3,20 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Resumidor Inteligente v7 (Estable para Android)</title>
+    <title>Convertidor de Texto a MP3</title>
     <!-- Incluyendo Tailwind CSS para el diseño -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Incluyendo Tesseract.js para OCR (Reconocimiento de Texto en Imágenes) -->
-    <script src='https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js'></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         body { font-family: 'Inter', sans-serif; }
-        ::-webkit-scrollbar { width: 8px; }
-        ::-webkit-scrollbar-track { background: #f1f1f1; }
-        ::-webkit-scrollbar-thumb { background: #888; border-radius: 4px; }
-        ::-webkit-scrollbar-thumb:hover { background: #555; }
         .loader {
             border: 4px solid #f3f3f3;
             border-radius: 50%;
@@ -29,115 +23,70 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
-        button:disabled {
-            cursor: not-allowed;
-            opacity: 0.6;
-        }
     </style>
 </head>
-<body class="bg-gray-50 text-gray-800 flex items-center justify-center min-h-screen p-4">
+<body class="bg-gray-100 text-gray-800 flex items-center justify-center min-h-screen p-4">
 
-    <div class="w-full max-w-4xl mx-auto bg-white shadow-2xl rounded-2xl p-6 md:p-10">
+    <div class="w-full max-w-2xl mx-auto bg-white shadow-2xl rounded-2xl p-6 md:p-10">
         
         <div class="text-center mb-8">
-            <h1 class="text-3xl md:text-4xl font-bold text-gray-900">Resumidor Inteligente Pro</h1>
-            <p class="text-gray-500 mt-2">Extrae, corrige y resume texto de una o varias páginas.</p>
+            <h1 class="text-3xl md:text-4xl font-bold text-gray-900">Reproductor de Texto</h1>
+            <p class="text-gray-500 mt-2">Escribe tu texto, elige una voz y escúchalo en voz alta.</p>
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-            
-            <!-- Columna para el texto original y las entradas de imagen -->
-            <div class="flex flex-col">
-                <label for="originalText" class="text-lg font-semibold mb-2 text-gray-700">Tu Texto Original</label>
-                <textarea id="originalText" rows="12" class="w-full p-4 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition duration-200 resize-none" placeholder="Pega texto aquí o usa la cámara/galería..."></textarea>
-                
-                <div class="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <button id="cameraBtn" class="w-full bg-gray-700 text-white font-bold py-3 px-4 rounded-lg hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-transform transform hover:scale-105 flex items-center justify-center gap-2">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"></path><circle cx="12" cy="13" r="3"></circle></svg>
-                        Usar Cámara
-                    </button>
-                    <button id="galleryBtn" class="w-full bg-purple-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transition-transform transform hover:scale-105 flex items-center justify-center gap-2">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
-                        Desde Galería
-                    </button>
-                </div>
-                <input type="file" id="cameraInput" class="hidden" accept="image/*" capture="environment">
-                <input type="file" id="galleryInput" class="hidden" accept="image/*" multiple>
-                <p class="text-xs text-center text-gray-500 mt-2">Puedes seleccionar varias imágenes desde la galería.</p>
+        <!-- Área de texto -->
+        <div class="mb-6">
+            <label for="text-input" class="text-lg font-semibold mb-2 text-gray-700 block">Texto a reproducir</label>
+            <textarea id="text-input" rows="8" class="w-full p-4 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition duration-200" placeholder="Escribe aquí lo que deseas escuchar..."></textarea>
+        </div>
 
-                <div id="ocrStatus" class="mt-3 text-center text-sm font-medium text-blue-600 h-5"></div>
-
-                <button id="summarizeBtn" class="mt-4 w-full bg-blue-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-transform transform hover:scale-105 flex items-center justify-center gap-2">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/><path d="M5 3v4"/><path d="M19 17v4"/><path d="M3 5h4"/><path d="M17 19h4"/></svg>
-                    Resumir Texto
-                </button>
+        <!-- Opciones de voz y velocidad -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-8">
+            <div>
+                <label for="voice-select" class="text-lg font-semibold mb-2 text-gray-700 block">Elige una voz</label>
+                <select id="voice-select" class="w-full p-3 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition duration-200">
+                    <option>Cargando voces...</option>
+                </select>
             </div>
-
-            <!-- Columna para el resumen generado -->
-            <div class="flex flex-col">
-                <label for="summary" class="text-lg font-semibold mb-2 text-gray-700">Resumen Generado</label>
-                <div id="summaryContainer" class="relative w-full h-full p-4 border border-gray-300 rounded-lg bg-gray-50 min-h-[300px] shadow-inner overflow-y-auto">
-                    <div id="loader" class="absolute inset-0 bg-white bg-opacity-75 flex items-center justify-center hidden z-10">
-                        <div class="text-center">
-                            <div class="loader mx-auto"></div>
-                            <p id="loader-text" class="mt-2 text-gray-600">Generando resumen...</p>
-                        </div>
-                    </div>
-                    <p id="summary" class="text-gray-600 whitespace-pre-wrap"></p>
-                </div>
-                <button id="readBtn" class="mt-4 w-full bg-green-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-transform transform hover:scale-105 flex items-center justify-center gap-2" disabled>
-                    <svg id="readBtnIcon" class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
-                    <span id="readBtnText">Leer Resumen</span>
-                </button>
-                <!-- Control de Velocidad de Voz -->
-                <div id="speedControlContainer" class="mt-3 flex items-center gap-3 hidden">
-                    <label for="speedControl" class="text-sm font-medium text-gray-700">Velocidad:</label>
-                    <input id="speedControl" type="range" min="0.5" max="2" value="1" step="0.1" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
-                    <span id="speedValue" class="text-sm font-semibold text-gray-800 w-10 text-center">1.0x</span>
-                </div>
+            <div>
+                <label for="rate-control" class="text-lg font-semibold mb-2 text-gray-700 block">Velocidad (<span id="rate-value">1.0</span>x)</label>
+                <input id="rate-control" type="range" min="0.5" max="2" value="1" step="0.1" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
             </div>
+        </div>
+
+        <!-- Botón de reproducción y estado -->
+        <div class="text-center">
+            <button id="play-btn" class="w-full sm:w-auto bg-indigo-600 text-white font-bold py-3 px-8 rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-transform transform hover:scale-105 flex items-center justify-center gap-3 mx-auto">
+                <svg id="play-btn-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+                <span id="play-btn-text">Reproducir</span>
+            </button>
+            <div id="status-container" class="mt-4 text-center min-h-[2rem]"></div>
         </div>
         
+        <!-- Mensaje de error -->
         <div id="error-message" class="mt-6 p-4 bg-red-100 border border-red-400 text-red-700 rounded-lg hidden"></div>
+
     </div>
 
     <script>
         // --- DOM Element Selection ---
-        const originalTextInput = document.getElementById('originalText');
-        const summarizeBtn = document.getElementById('summarizeBtn');
-        const summaryOutput = document.getElementById('summary');
-        const readBtn = document.getElementById('readBtn');
-        const readBtnIcon = document.getElementById('readBtnIcon');
-        const readBtnText = document.getElementById('readBtnText');
-        const loader = document.getElementById('loader');
-        const loaderText = document.getElementById('loader-text');
+        const textInput = document.getElementById('text-input');
+        const voiceSelect = document.getElementById('voice-select');
+        const playBtn = document.getElementById('play-btn');
+        const playBtnIcon = document.getElementById('play-btn-icon');
+        const playBtnText = document.getElementById('play-btn-text');
+        const statusContainer = document.getElementById('status-container');
         const errorMessageDiv = document.getElementById('error-message');
-        const cameraBtn = document.getElementById('cameraBtn');
-        const galleryBtn = document.getElementById('galleryBtn');
-        const cameraInput = document.getElementById('cameraInput');
-        const galleryInput = document.getElementById('galleryInput');
-        const ocrStatus = document.getElementById('ocrStatus');
-        const speedControlContainer = document.getElementById('speedControlContainer');
-        const speedControl = document.getElementById('speedControl');
-        const speedValue = document.getElementById('speedValue');
+        const rateControl = document.getElementById('rate-control');
+        const rateValue = document.getElementById('rate-value');
 
-        let isSpeaking = false;
+        const synth = window.speechSynthesis;
+        let voices = [];
         let utteranceQueue = [];
-        const API_MODEL = 'gemini-2.0-flash'; 
+        const speechState = { IDLE: 'idle', PLAYING: 'playing', PAUSED: 'paused' };
+        let currentSpeechState = speechState.IDLE;
 
         // --- UI and State Management ---
-        function setButtonsState(disabled) {
-            summarizeBtn.disabled = disabled;
-            cameraBtn.disabled = disabled;
-            galleryBtn.disabled = disabled;
-        }
-
-        function setLoading(isLoading, message = "Procesando...") {
-            loader.classList.toggle('hidden', !isLoading);
-            loaderText.textContent = message;
-            setButtonsState(isLoading);
-        }
-
         function displayError(message) {
             errorMessageDiv.textContent = message;
             errorMessageDiv.classList.remove('hidden');
@@ -148,245 +97,130 @@
             errorMessageDiv.textContent = '';
         }
 
-        // --- Core Logic ---
-
-        async function callAI(prompt) {
-            const payload = { contents: [{ role: "user", parts: [{ text: prompt }] }] };
-            const apiKey = ""; // Key is managed by the execution environment.
-            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${API_MODEL}:generateContent?key=${apiKey}`;
-
-            try {
-                const response = await fetch(apiUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
-
-                if (!response.ok) {
-                    const errorBody = await response.json().catch(() => ({ error: { message: 'No se pudo leer la respuesta de error.' } }));
-                    console.error("API Error Response:", errorBody);
-                    const errorMessage = errorBody?.error?.message || `Código: ${response.status}`;
-                    throw new Error(`Error de la IA: ${errorMessage}`);
-                }
-
-                const result = await response.json();
-
-                if (result.candidates?.[0]?.content?.parts?.[0]?.text) {
-                    return result.candidates[0].content.parts[0].text;
-                } else {
-                    console.error("Unexpected API response structure:", result);
-                    throw new Error("La respuesta de la IA no tuvo el formato esperado.");
-                }
-            } catch (error) {
-                console.error("Fetch/Network Error:", error);
-                throw new Error(error.message || "Error de red al contactar la IA. Revisa tu conexión.");
-            }
-        }
-        
-        async function correctTextWithAI(rawText) {
-            const prompt = `El siguiente texto fue extraído de una imagen usando OCR y puede contener errores. Tu tarea es limpiar y corregir este texto para que sea gramaticalmente correcto y legible. No cambies el significado original. Une las palabras que estén separadas incorrectamente y arregla los saltos de línea para formar párrafos coherentes. Devuelve únicamente el texto limpio y corregido.\n\nTexto a corregir:\n"""\n${rawText}\n"""`;
-            return callAI(prompt);
-        }
-
-        async function processImageFiles(files) {
-            if (!files || files.length === 0) return;
-            
-            clearError();
-            originalTextInput.value = '';
-            setLoading(true, 'Iniciando proceso...');
-            
-            const allCorrectedTexts = [];
-            const totalFiles = files.length;
-
-            try {
-                for (let i = 0; i < totalFiles; i++) {
-                    const file = files[i];
-                    const statusPrefix = `[Página ${i + 1}/${totalFiles}]`;
-                    let worker = null;
-                    
-                    try {
-                        setLoading(true, `${statusPrefix} Cargando motor OCR...`);
-                        ocrStatus.textContent = `${statusPrefix} Cargando...`;
-                        worker = await Tesseract.createWorker('spa');
-                        
-                        setLoading(true, `${statusPrefix} Reconociendo texto...`);
-                        ocrStatus.textContent = `${statusPrefix} Reconociendo...`;
-                        const { data: { text: rawText } } = await worker.recognize(file);
-                        
-                        if (!rawText.trim()) {
-                            console.warn(`No se encontró texto en la página ${i + 1}.`);
-                            continue; 
-                        }
-
-                        setLoading(true, `${statusPrefix} Corrigiendo con IA...`);
-                        ocrStatus.textContent = `${statusPrefix} Corrigiendo...`;
-                        const correctedText = await correctTextWithAI(rawText);
-                        allCorrectedTexts.push(correctedText);
-
-                    } catch(err) {
-                        console.error(`Error procesando la página ${i + 1}:`, err);
-                        displayError(`Ocurrió un error en la página ${i + 1}. Saltando a la siguiente.`);
-                    } finally {
-                        if (worker) {
-                            await worker.terminate();
-                            ocrStatus.textContent = `${statusPrefix} completado.`;
-                        }
-                    }
-                }
-                
-                originalTextInput.value = allCorrectedTexts.join('\n\n---\n\n');
-
-            } catch (error) {
-                console.error("Error general en el proceso de imágenes:", error);
-                displayError(error.message);
-            } finally {
-                setLoading(false);
-                ocrStatus.textContent = 'Proceso completado.';
+        function updatePlayButtonUI(state) {
+            currentSpeechState = state;
+            switch (state) {
+                case speechState.PLAYING:
+                    playBtnText.textContent = 'Pausar';
+                    playBtnIcon.innerHTML = `<rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect>`; // Pause icon
+                    playBtn.classList.replace('bg-indigo-600', 'bg-orange-500');
+                    playBtn.classList.replace('hover:bg-indigo-700', 'hover:bg-orange-600');
+                    break;
+                case speechState.PAUSED:
+                    playBtnText.textContent = 'Reanudar';
+                    playBtnIcon.innerHTML = `<polygon points="5 3 19 12 5 21 5 3"></polygon>`; // Play icon
+                    playBtn.classList.replace('bg-orange-500', 'bg-indigo-600');
+                    playBtn.classList.replace('hover:bg-orange-600', 'hover:bg-indigo-700');
+                    break;
+                case speechState.IDLE:
+                default:
+                    playBtnText.textContent = 'Reproducir';
+                    playBtnIcon.innerHTML = `<polygon points="5 3 19 12 5 21 5 3"></polygon>`; // Play icon
+                    playBtn.classList.remove('bg-orange-500', 'hover:bg-orange-600');
+                    playBtn.classList.add('bg-indigo-600', 'hover:bg-indigo-700');
+                    break;
             }
         }
 
-        async function handleSummarize() {
-            clearError();
-            const textToSummarize = originalTextInput.value.trim();
+        // --- Core Functions ---
 
-            if (!textToSummarize) {
-                displayError("Por favor, introduce o extrae algo de texto para resumir.");
+        function populateVoiceList() {
+            voices = synth.getVoices();
+            voiceSelect.innerHTML = '';
+            if (voices.length === 0) {
+                voiceSelect.innerHTML = '<option>No hay voces disponibles</option>';
                 return;
             }
-
-            setLoading(true, 'Generando resumen...');
-            summaryOutput.textContent = '';
-            readBtn.disabled = true;
-            speedControlContainer.classList.add('hidden');
-
-            const synth = window.speechSynthesis;
-            if (synth.speaking || synth.pending) {
-                isSpeaking = false;
-                utteranceQueue = [];
-                synth.cancel();
-            }
-
-            try {
-                const prompt = `Resume el siguiente texto, que puede contener múltiples páginas separadas por "---". Extrae las ideas y puntos más importantes de todo el contenido de forma clara y concisa en una lista de viñetas (bullet points). El resumen debe ser coherente y fácil de entender.\n\nTexto completo:\n"""\n${textToSummarize}\n"""`;
-                const summaryText = await callAI(prompt);
-                summaryOutput.textContent = summaryText;
-                readBtn.disabled = false;
-                speedControlContainer.classList.remove('hidden');
-            } catch (error) {
-                console.error("Error durante el resumen:", error);
-                displayError(error.message);
-            } finally {
-                setLoading(false);
-            }
+            const spanishVoices = voices.filter(voice => voice.lang.startsWith('es'));
+            const otherVoices = voices.filter(voice => !voice.lang.startsWith('es'));
+            const createOption = (voice) => {
+                const option = document.createElement('option');
+                option.textContent = `${voice.name} (${voice.lang})`;
+                option.setAttribute('data-name', voice.name);
+                return option;
+            };
+            spanishVoices.forEach(voice => voiceSelect.appendChild(createOption(voice)));
+            otherVoices.forEach(voice => voiceSelect.appendChild(createOption(voice)));
         }
-        
-        // --- Speech Synthesis Logic (Robust Android-focused Version) ---
 
-        const synth = window.speechSynthesis;
-
-        function updateReadButtonUI(speaking) {
-            isSpeaking = speaking;
-            if (speaking) {
-                readBtnText.textContent = 'Detener';
-                readBtnIcon.innerHTML = `<rect x="6" y="6" width="12" height="12"></rect>`; // Stop icon
-                readBtn.classList.replace('bg-green-600', 'bg-red-600');
-                readBtn.classList.replace('hover:bg-green-700', 'hover:bg-red-700');
-            } else {
-                readBtnText.textContent = 'Leer Resumen';
-                readBtnIcon.innerHTML = `<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>`; // Play icon
-                readBtn.classList.remove('bg-red-600', 'hover:bg-red-700');
-                readBtn.classList.add('bg-green-600', 'hover:bg-green-700');
-            }
-        }
-        
         function speakNextChunk() {
-            if (utteranceQueue.length > 0 && isSpeaking) {
+            if (utteranceQueue.length > 0 && currentSpeechState === speechState.PLAYING) {
                 const utterance = utteranceQueue.shift();
                 utterance.onend = speakNextChunk;
                 utterance.onerror = (event) => {
                     console.error('SpeechSynthesisUtterance.onerror', event);
-                    // No mostramos error al usuario, simplemente detenemos la lectura.
-                    updateReadButtonUI(false); 
+                    updatePlayButtonUI(speechState.IDLE);
                 };
                 synth.speak(utterance);
             } else {
-                updateReadButtonUI(false);
+                updatePlayButtonUI(speechState.IDLE);
             }
         }
 
-        function handleReadAloud() {
-            if (!synth) {
-                displayError("Tu navegador no soporta la síntesis de voz.");
-                return;
-            }
+        function handlePlayback() {
+            clearError();
+            if (currentSpeechState === speechState.PLAYING) {
+                synth.pause();
+                updatePlayButtonUI(speechState.PAUSED);
+            } else if (currentSpeechState === speechState.PAUSED) {
+                synth.resume();
+                updatePlayButtonUI(speechState.PLAYING);
+            } else { // IDLE
+                const text = textInput.value.trim();
+                const selectedVoiceName = voiceSelect.selectedOptions[0]?.getAttribute('data-name');
 
-            if (isSpeaking) {
-                isSpeaking = false;
-                utteranceQueue = [];
-                synth.cancel();
-                updateReadButtonUI(false);
-            } else {
-                const textToRead = summaryOutput.textContent;
-                if (!textToRead) return;
+                if (!text) {
+                    displayError("Por favor, introduce algo de texto.");
+                    return;
+                }
+                if (!selectedVoiceName) {
+                    displayError("No se ha podido seleccionar una voz. Por favor, recarga la página.");
+                    return;
+                }
 
-                synth.cancel(); // Clear any previous state
+                synth.cancel(); // Clear any previous utterances
                 
-                // Dividir el texto en frases cortas. Esto es crucial para la estabilidad en Android.
-                const chunks = textToRead.match(/[^.!?]+[.!?]*\s*|[^.!?]+$/g) || [];
+                const chunks = text.match(/[^.!?]+[.!?]*\s*|[^.!?]+$/g) || [];
                 utteranceQueue = chunks.map(chunk => {
                     const utterance = new SpeechSynthesisUtterance(chunk.trim());
-                    utterance.lang = 'es-ES';
-                    utterance.rate = parseFloat(speedControl.value);
+                    utterance.voice = voices.find(v => v.name === selectedVoiceName);
+                    utterance.lang = utterance.voice?.lang || 'es-ES';
+                    utterance.rate = parseFloat(rateControl.value);
                     return utterance;
                 }).filter(u => u.text.length > 0);
 
                 if (utteranceQueue.length > 0) {
-                    updateReadButtonUI(true);
+                    updatePlayButtonUI(speechState.PLAYING);
                     speakNextChunk();
                 }
             }
         }
-        
+
         // --- Event Listeners ---
-        summarizeBtn.addEventListener('click', handleSummarize);
-        readBtn.addEventListener('click', handleReadAloud);
-        cameraBtn.addEventListener('click', () => cameraInput.click());
-        galleryBtn.addEventListener('click', () => galleryInput.click());
         
-        cameraInput.addEventListener('change', (event) => {
-            processImageFiles(event.target.files);
-            event.target.value = null;
-        });
+        if (synth.onvoiceschanged !== undefined) {
+            synth.onvoiceschanged = populateVoiceList;
+        }
+        populateVoiceList();
 
-        galleryInput.addEventListener('change', (event) => {
-            processImageFiles(event.target.files);
-            event.target.value = null;
-        });
+        playBtn.addEventListener('click', handlePlayback);
 
-        speedControl.addEventListener('input', (event) => {
-            const currentSpeed = parseFloat(event.target.value).toFixed(1);
-            speedValue.textContent = `${currentSpeed}x`;
-            if (isSpeaking) {
+        rateControl.addEventListener('input', () => {
+            rateValue.textContent = parseFloat(rateControl.value).toFixed(1);
+            if (currentSpeechState !== speechState.IDLE) {
                 synth.cancel();
-                // Un pequeño retraso ayuda a asegurar que el comando de cancelar se haya procesado
-                // antes de iniciar una nueva secuencia de voz.
-                setTimeout(() => {
-                    handleReadAloud();
-                }, 250);
+                updatePlayButtonUI(speechState.IDLE);
             }
         });
 
-        // Red de seguridad para reiniciar la UI si el motor de voz se cuelga.
-        // Esto es un problema común en navegadores móviles.
+        // Safety check to reset UI if speech engine hangs
         setInterval(() => {
-            if (isSpeaking && !synth.speaking) {
-                console.warn("El motor de voz se ha colgado. Reiniciando UI.");
-                updateReadButtonUI(false);
+            if (currentSpeechState !== speechState.IDLE && !synth.speaking && !synth.paused) {
+                console.warn("Speech synthesis hung. Resetting UI.");
+                updatePlayButtonUI(speechState.IDLE);
             }
-        }, 2000);
+        }, 1000);
 
     </script>
 </body>
 </html>
-
-

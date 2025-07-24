@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Reproductor de Texto con Opción de Descarga</title>
+    <title>Reproductor de Texto Avanzado</title>
     <!-- Incluyendo Tailwind CSS para el diseño -->
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -30,7 +30,7 @@
     <div class="w-full max-w-2xl mx-auto bg-white shadow-2xl rounded-2xl p-6 md:p-10">
         
         <div class="text-center mb-8">
-            <h1 class="text-3xl md:text-4xl font-bold text-gray-900">Reproductor de Texto</h1>
+            <h1 class="text-3xl md:text-4xl font-bold text-gray-900">Reproductor de Texto Avanzado</h1>
             <p class="text-gray-500 mt-2">Escribe tu texto, elige una voz y escúchalo en voz alta.</p>
         </div>
 
@@ -54,19 +54,12 @@
             </div>
         </div>
 
-        <!-- Botones de acción -->
+        <!-- Botón de acción -->
         <div class="text-center">
-            <div class="flex flex-col sm:flex-row items-center justify-center gap-4">
-                <button id="play-btn" class="w-full sm:w-auto bg-indigo-600 text-white font-bold py-3 px-8 rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-transform transform hover:scale-105 flex items-center justify-center gap-3">
-                    <svg id="play-btn-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
-                    <span id="play-btn-text">Reproducir</span>
-                </button>
-                <button id="download-btn" disabled class="w-full sm:w-auto bg-gray-400 text-white font-bold py-3 px-8 rounded-lg cursor-not-allowed flex items-center justify-center gap-3">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                    <span>Descargar MP3</span>
-                </button>
-            </div>
-            <p id="download-info" class="text-xs text-gray-500 mt-3">La descarga de audio no está disponible en esta plataforma por motivos de seguridad que impiden la grabación de audio.</p>
+            <button id="play-btn" class="w-full sm:w-auto bg-indigo-600 text-white font-bold py-3 px-8 rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-transform transform hover:scale-105 flex items-center justify-center gap-3">
+                <svg id="play-btn-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+                <span id="play-btn-text">Reproducir</span>
+            </button>
             <div id="status-container" class="mt-4 text-center min-h-[2rem]"></div>
         </div>
         
@@ -238,4 +231,3 @@
     </script>
 </body>
 </html>
-

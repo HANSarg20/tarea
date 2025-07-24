@@ -31,7 +31,7 @@
         
         <div class="text-center mb-8">
             <h1 class="text-3xl md:text-4xl font-bold text-gray-900">Reproductor de Texto Avanzado</h1>
-            <p class="text-gray-500 mt-2">Escribe tu texto, elige una voz y escúchalo en voz alta.</p>
+            <p class="text-gray-500 mt-2">Escribe tu texto, elige una voz en español y escúchalo en voz alta.</p>
         </div>
 
         <!-- Área de texto -->
@@ -169,39 +169,25 @@
                 return option;
             };
 
-            const allSpanishVoices = voices.filter(voice => voice.lang.startsWith('es'));
-            const allOtherVoices = voices.filter(voice => !voice.lang.startsWith('es'));
+            // 1. Get all Spanish voices first.
+            let spanishVoices = voices.filter(voice => voice.lang.startsWith('es'));
 
-            let finalSpanishVoices = allSpanishVoices;
-            let finalOtherVoices = allOtherVoices;
-
+            // 2. Apply gender filter ONLY to the Spanish voices.
             if (genderFilterValue !== 'all') {
                 const keywords = genderFilterValue === 'female' ? femaleKeywords : maleKeywords;
-                
-                const genderFilteredSpanish = allSpanishVoices.filter(voice => {
+                spanishVoices = spanishVoices.filter(voice => {
                     const name = voice.name.toLowerCase();
                     return keywords.some(keyword => name.includes(keyword));
                 });
-
-                // Only apply filter if it finds at least one voice, otherwise show all Spanish voices.
-                if (genderFilteredSpanish.length > 0) {
-                    finalSpanishVoices = genderFilteredSpanish;
-                }
-
-                const genderFilteredOther = allOtherVoices.filter(voice => {
-                    const name = voice.name.toLowerCase();
-                    return keywords.some(keyword => name.includes(keyword));
-                });
-                finalOtherVoices = genderFilteredOther;
             }
 
-            if (finalSpanishVoices.length === 0 && finalOtherVoices.length === 0) {
-                 voiceSelect.innerHTML = `<option>No hay voces para este filtro</option>`;
+            // 3. Populate the list.
+            if (spanishVoices.length === 0) {
+                 voiceSelect.innerHTML = `<option>No hay voces en español para este filtro</option>`;
                  return;
             }
 
-            finalSpanishVoices.forEach(voice => voiceSelect.appendChild(createOption(voice)));
-            finalOtherVoices.forEach(voice => voiceSelect.appendChild(createOption(voice)));
+            spanishVoices.forEach(voice => voiceSelect.appendChild(createOption(voice)));
         }
 
         function speakNextChunk() {
@@ -235,7 +221,7 @@
                     return;
                 }
                 if (!selectedVoiceName) {
-                    displayError("No se ha podido seleccionar una voz. Por favor, recarga la página.");
+                    displayError("No se ha podido seleccionar una voz. Por favor, recarga la página o cambia el filtro.");
                     return;
                 }
 

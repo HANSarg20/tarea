@@ -151,23 +151,27 @@
 
         // --- Core Functions ---
 
-        function populateVoiceList(genderFilter = 'all') {
+        function populateVoiceList(genderFilterValue = 'all') {
             voices = synth.getVoices();
             voiceSelect.innerHTML = '';
             if (voices.length === 0) {
-                setTimeout(() => populateVoiceList(genderFilter), 200);
+                setTimeout(() => populateVoiceList(genderFilterValue), 200);
                 return;
             }
 
+            // Improved keywords for gender detection
+            const femaleKeywords = ['female', 'woman', 'girl', 'mujer', 'femenina', 'femenino', 'sabina', 'helena', 'laura', 'paulina', 'zira', 'susan', 'catherine', 'eva', 'lucia', 'elena', 'monica', 'carmen'];
+            const maleKeywords = ['male', 'man', 'boy', 'hombre', 'masculina', 'masculino', 'jorge', 'pablo', 'david', 'ricardo', 'hector', 'raul', 'diego'];
+
             let filteredVoices = voices;
-            if (genderFilter !== 'all') {
+            if (genderFilterValue !== 'all') {
                 filteredVoices = voices.filter(voice => {
                     const name = voice.name.toLowerCase();
-                    if (genderFilter === 'female') {
-                        return name.includes('female') || name.includes('mujer');
+                    if (genderFilterValue === 'female') {
+                        return femaleKeywords.some(keyword => name.includes(keyword));
                     }
-                    if (genderFilter === 'male') {
-                        return name.includes('male') || name.includes('hombre');
+                    if (genderFilterValue === 'male') {
+                        return maleKeywords.some(keyword => name.includes(keyword));
                     }
                     return false;
                 });
@@ -184,7 +188,7 @@
             };
 
             if (spanishVoices.length === 0 && otherVoices.length === 0) {
-                 voiceSelect.innerHTML = `<option>No hay voces de tipo '${genderFilter}'</option>`;
+                 voiceSelect.innerHTML = `<option>No hay voces para este filtro</option>`;
                  return;
             }
 

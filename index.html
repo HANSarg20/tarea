@@ -40,6 +40,25 @@
             <textarea id="text-input" rows="8" class="w-full p-4 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition duration-200" placeholder="Escribe aquí lo que deseas escuchar..."></textarea>
         </div>
 
+        <!-- Filtro de Género -->
+        <div class="mb-6">
+            <label class="text-lg font-semibold mb-2 text-gray-700 block">Filtrar voz por género</label>
+            <div class="flex items-center space-x-4" id="gender-filter">
+                <label class="flex items-center">
+                    <input type="radio" name="gender" value="all" class="form-radio h-4 w-4 text-indigo-600" checked>
+                    <span class="ml-2 text-gray-700">Todas</span>
+                </label>
+                <label class="flex items-center">
+                    <input type="radio" name="gender" value="female" class="form-radio h-4 w-4 text-indigo-600">
+                    <span class="ml-2 text-gray-700">Femenina</span>
+                </label>
+                <label class="flex items-center">
+                    <input type="radio" name="gender" value="male" class="form-radio h-4 w-4 text-indigo-600">
+                    <span class="ml-2 text-gray-700">Masculina</span>
+                </label>
+            </div>
+        </div>
+
         <!-- Opciones de voz y velocidad -->
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-8">
             <div>
@@ -54,12 +73,19 @@
             </div>
         </div>
 
-        <!-- Botón de acción -->
+        <!-- Botones de acción -->
         <div class="text-center">
-            <button id="play-btn" class="w-full sm:w-auto bg-indigo-600 text-white font-bold py-3 px-8 rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-transform transform hover:scale-105 flex items-center justify-center gap-3">
-                <svg id="play-btn-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
-                <span id="play-btn-text">Reproducir</span>
-            </button>
+             <div class="flex flex-col sm:flex-row items-center justify-center gap-4">
+                <button id="play-btn" class="w-full sm:w-auto bg-indigo-600 text-white font-bold py-3 px-8 rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-transform transform hover:scale-105 flex items-center justify-center gap-3">
+                    <svg id="play-btn-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+                    <span id="play-btn-text">Reproducir</span>
+                </button>
+                 <button id="download-btn" disabled class="w-full sm:w-auto bg-gray-400 text-white font-bold py-3 px-8 rounded-lg cursor-not-allowed flex items-center justify-center gap-3">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                    <span>Descargar MP3</span>
+                </button>
+            </div>
+            <p id="download-info" class="text-xs text-gray-500 mt-3">La descarga de audio no está disponible en esta plataforma por motivos de seguridad que impiden la grabación de audio.</p>
             <div id="status-container" class="mt-4 text-center min-h-[2rem]"></div>
         </div>
         
@@ -79,6 +105,7 @@
         const errorMessageDiv = document.getElementById('error-message');
         const rateControl = document.getElementById('rate-control');
         const rateValue = document.getElementById('rate-value');
+        const genderFilter = document.getElementById('gender-filter');
 
         const synth = window.speechSynthesis;
         let voices = [];
@@ -124,16 +151,31 @@
 
         // --- Core Functions ---
 
-        function populateVoiceList() {
+        function populateVoiceList(genderFilter = 'all') {
             voices = synth.getVoices();
             voiceSelect.innerHTML = '';
             if (voices.length === 0) {
-                // Retry after a short delay, as some browsers load voices asynchronously.
-                setTimeout(populateVoiceList, 200);
+                setTimeout(() => populateVoiceList(genderFilter), 200);
                 return;
             }
-            const spanishVoices = voices.filter(voice => voice.lang.startsWith('es'));
-            const otherVoices = voices.filter(voice => !voice.lang.startsWith('es'));
+
+            let filteredVoices = voices;
+            if (genderFilter !== 'all') {
+                filteredVoices = voices.filter(voice => {
+                    const name = voice.name.toLowerCase();
+                    if (genderFilter === 'female') {
+                        return name.includes('female') || name.includes('mujer');
+                    }
+                    if (genderFilter === 'male') {
+                        return name.includes('male') || name.includes('hombre');
+                    }
+                    return false;
+                });
+            }
+
+            const spanishVoices = filteredVoices.filter(voice => voice.lang.startsWith('es'));
+            const otherVoices = filteredVoices.filter(voice => !voice.lang.startsWith('es'));
+            
             const createOption = (voice) => {
                 const option = document.createElement('option');
                 option.textContent = `${voice.name} (${voice.lang})`;
@@ -142,7 +184,7 @@
             };
 
             if (spanishVoices.length === 0 && otherVoices.length === 0) {
-                 voiceSelect.innerHTML = '<option>No hay voces disponibles</option>';
+                 voiceSelect.innerHTML = `<option>No hay voces de tipo '${genderFilter}'</option>`;
                  return;
             }
 
@@ -185,7 +227,7 @@
                     return;
                 }
 
-                synth.cancel(); // Clear any previous utterances
+                synth.cancel(); 
                 
                 const chunks = text.match(/[^.!?]+[.!?]*\s*|[^.!?]+$/g) || [];
                 utteranceQueue = chunks.map(chunk => {
@@ -206,7 +248,7 @@
         // --- Event Listeners ---
         
         if (synth.onvoiceschanged !== undefined) {
-            synth.onvoiceschanged = populateVoiceList;
+            synth.onvoiceschanged = () => populateVoiceList();
         }
         populateVoiceList();
 
@@ -220,7 +262,14 @@
             }
         });
 
-        // Safety check to reset UI if speech engine hangs
+        genderFilter.addEventListener('change', (e) => {
+            populateVoiceList(e.target.value);
+            if (currentSpeechState !== speechState.IDLE) {
+                synth.cancel();
+                updatePlayButtonUI(speechState.IDLE);
+            }
+        });
+
         setInterval(() => {
             if (currentSpeechState !== speechState.IDLE && !synth.speaking && !synth.paused) {
                 console.warn("Speech synthesis hung. Resetting UI.");

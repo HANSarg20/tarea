@@ -159,27 +159,9 @@
                 return;
             }
 
-            // Improved keywords for gender detection
             const femaleKeywords = ['female', 'woman', 'girl', 'mujer', 'femenina', 'femenino', 'sabina', 'helena', 'laura', 'paulina', 'zira', 'susan', 'catherine', 'eva', 'lucia', 'elena', 'monica', 'carmen'];
-            const maleKeywords = ['male', 'man', 'boy', 'hombre', 'masculina', 'masculino', 'jorge', 'pablo', 'david', 'ricardo', 'hector', 'raul', 'diego'];
+            const maleKeywords = ['male', 'man', 'boy', 'hombre', 'masculina', 'masculino', 'jorge', 'pablo', 'david', 'ricardo', 'hector', 'raul', 'diego', 'carlos'];
 
-            let filteredVoices = voices;
-            if (genderFilterValue !== 'all') {
-                filteredVoices = voices.filter(voice => {
-                    const name = voice.name.toLowerCase();
-                    if (genderFilterValue === 'female') {
-                        return femaleKeywords.some(keyword => name.includes(keyword));
-                    }
-                    if (genderFilterValue === 'male') {
-                        return maleKeywords.some(keyword => name.includes(keyword));
-                    }
-                    return false;
-                });
-            }
-
-            const spanishVoices = filteredVoices.filter(voice => voice.lang.startsWith('es'));
-            const otherVoices = filteredVoices.filter(voice => !voice.lang.startsWith('es'));
-            
             const createOption = (voice) => {
                 const option = document.createElement('option');
                 option.textContent = `${voice.name} (${voice.lang})`;
@@ -187,13 +169,39 @@
                 return option;
             };
 
-            if (spanishVoices.length === 0 && otherVoices.length === 0) {
+            const allSpanishVoices = voices.filter(voice => voice.lang.startsWith('es'));
+            const allOtherVoices = voices.filter(voice => !voice.lang.startsWith('es'));
+
+            let finalSpanishVoices = allSpanishVoices;
+            let finalOtherVoices = allOtherVoices;
+
+            if (genderFilterValue !== 'all') {
+                const keywords = genderFilterValue === 'female' ? femaleKeywords : maleKeywords;
+                
+                const genderFilteredSpanish = allSpanishVoices.filter(voice => {
+                    const name = voice.name.toLowerCase();
+                    return keywords.some(keyword => name.includes(keyword));
+                });
+
+                // Only apply filter if it finds at least one voice, otherwise show all Spanish voices.
+                if (genderFilteredSpanish.length > 0) {
+                    finalSpanishVoices = genderFilteredSpanish;
+                }
+
+                const genderFilteredOther = allOtherVoices.filter(voice => {
+                    const name = voice.name.toLowerCase();
+                    return keywords.some(keyword => name.includes(keyword));
+                });
+                finalOtherVoices = genderFilteredOther;
+            }
+
+            if (finalSpanishVoices.length === 0 && finalOtherVoices.length === 0) {
                  voiceSelect.innerHTML = `<option>No hay voces para este filtro</option>`;
                  return;
             }
 
-            spanishVoices.forEach(voice => voiceSelect.appendChild(createOption(voice)));
-            otherVoices.forEach(voice => voiceSelect.appendChild(createOption(voice)));
+            finalSpanishVoices.forEach(voice => voiceSelect.appendChild(createOption(voice)));
+            finalOtherVoices.forEach(voice => voiceSelect.appendChild(createOption(voice)));
         }
 
         function speakNextChunk() {
